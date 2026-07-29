@@ -415,7 +415,7 @@ details[open] summary::after{transform:rotate(180deg);}
   </details>
 
   <button class="btn btn-ghost" id="close-sheet" style="margin-top:var(--s5)">סגירה</button>
-  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 4.4</p>
+  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 4.7</p>
 </div>
 
 <script>
@@ -531,9 +531,14 @@ function renderConn(state, text){
 const say = (t) => renderConn(ble.connected ? "connected" : "idle", t);
 const buzz = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 
-/* ---------- תור כתיבה סדרתי (BLE אוסר כתיבות חופפות) ---------- */
-let chain = Promise.resolve();
-function enqueue(job){ const run = chain.then(job, job); chain = run.catch(() => {}); return run; }
+/* ---------- מנוע כתיבה: מודל "מצב רצוי" ----------
+   לא תור פקודות. האפליקציה מחזיקה רק את המצב שאליו צריך להגיע כרגע
+   (desired), ומנוע יחיד (pump) מוביל את החומרה לשם.
+
+   למה זה חשוב: בתור פקודות, כל לחיצה מוסיפה 4 כתיבות. לחיצות מהירות
+   נכנסות מהר יותר משהבלוטות' מספיק לשלוח, התור מתארך, והרמפה ממשיכה
+   "לנגן" לחיצות ישנות אחרי שהאצבע כבר עזבה. כאן לחיצה חדשה פשוט
+   דורסת את היעד — אין הצטברות, ואחרי השחרור היעד תמיד "הכל כבוי". */
 async function writeRaw(bytes){
   if (!ble.chr || !ble.connected) throw new Error("no-link");
   const p = ble.chr.properties;
@@ -542,6 +547,7 @@ async function writeRaw(bytes){
   return ble.chr.writeValue(bytes);
 }
 async function writeOnce(bytes, critical){
+  if (!bytes || !bytes.length) return;
   let err;
   for (let i = 0; i < (critical ? 3 : 1); i++) {
     try { return await writeRaw(bytes); }
@@ -549,27 +555,62 @@ async function writeOnce(bytes, critical){
   }
   throw err;
 }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/* אורך פעימה מינימלי מאפשר לכוון את הרמפה בנגיעות קצרות. */
-let startedAt = 0;
+let desired = null;      // לאן צריך להגיע: null = הכל כבוי, או מספר ממסר
+let applied = null;      // איזה כיוון נכתב בפועל לחומרה
+let masterOn = false;    // מצב הממסר הראשי — נעקב בנפרד, אחרת הוא נשאר דלוק
+let onSince = 0;         // מתי הודלק, לצורך הפעימה המזערית
+let immediateOff = false;// עצירת חירום: בלי המתנה לפעימה
+let pumping = false;
 
-/* שולח רצף פקודות כיחידה אחת בלתי-מתחלקת.
-   קריטי: אסור לשרשר שליחות עם .then() מחוץ לתור. אם עושים זאת,
-   הפקודה השנייה נכנסת לתור רק אחרי שהראשונה הסתיימה — ובלחיצה
-   קצרה פקודת העצירה מספיקה להידחף באמצע, כך שההדלקה נשלחת
-   *אחרי* הכיבוי והממסר נשאר דלוק. */
-function sendSeq(list, { critical = false, waitBefore = 0 } = {}){
-  return enqueue(async () => {
-    if (waitBefore > 0) await new Promise((r) => setTimeout(r, waitBefore));
-    for (const bytes of list) {
-      if (!bytes || !bytes.length) continue;
-      await writeOnce(bytes, critical);
-    }
-  });
+function setDesired(state, { immediate = false } = {}){
+  desired = state;
+  if (immediate) immediateOff = true;
+  pump();
 }
-function send(bytes, critical){
-  if (!bytes || !bytes.length) return Promise.reject(new Error("empty"));
-  return sendSeq([bytes], { critical });
+
+const settled = () => applied === desired && !(desired === null && masterOn);
+
+async function pump(){
+  if (pumping) return;
+  pumping = true;
+  try {
+    while (ble.connected && !settled()) {
+      const target = desired;
+
+      if (target !== null) {
+        if (!masterOn) { await writeOnce(BYTES[MASTER].on); masterOn = true; }
+        // אם בינתיים נבחר כיוון *אחר* — נוטשים, כדי לא להזיז לכיוון הלא נכון.
+        // אם פשוט שוחרר (desired=null) — משלימים בכוונה, כדי שנגיעה
+        // קצרצרה תיתן תזוזה במקום להיבלע בזמן הכתיבה של הראשי.
+        if (desired !== null && desired !== target) continue;
+        await writeOnce(BYTES[target].on);
+        applied = target;
+        onSince = Date.now();
+        continue;
+      }
+
+      // כיבוי: משלימים פעימה מזערית כדי שנגיעה קצרה תזיז את הרמפה
+      if (applied !== null && !immediateOff && cfg.minPulseMs > 0) {
+        const rem = cfg.minPulseMs - (Date.now() - onSince);
+        if (rem > 0) await sleep(rem);
+        // נלחץ שוב אותו כיוון בזמן ההמתנה — נשארים דלוקים (תנועה רציפה)
+        if (desired === applied) continue;
+      }
+      const was = applied;
+      applied = null;
+      if (was !== null) await writeOnce(BYTES[was].off, true);
+      if (masterOn) { await writeOnce(BYTES[MASTER].off, true); masterOn = false; }
+      immediateOff = false;
+    }
+  } catch {
+    say("שים לב: הפקודה לא אושרה");
+  } finally {
+    pumping = false;
+    // אם היעד השתנה בדיוק בזמן שיצאנו — מריצים שוב
+    if (ble.connected && !settled()) pump();
+  }
 }
 
 /* ---------- הפעלה / עצירה ---------- */
@@ -578,7 +619,6 @@ function startRelay(relay, name){
   if (BYTES[relay].onEmpty || BYTES[relay].offEmpty) { say("חסרה הגדרת פקודה"); return; }
 
   active = relay;
-  startedAt = Date.now();
   renderConn("connected", `${name} · פועל`);
   buzz(12);
 
@@ -587,29 +627,17 @@ function startRelay(relay, name){
     if (!ble.device?.gatt?.connected) { releaseAll(true); say("הקשר נותק"); }
   }, 400);
 
-  // ראשי ואז הפעולה — רצף אטומי אחד. שום פקודה לא יכולה להידחף באמצע.
-  // ההדלקה נשלחת תמיד, גם בנגיעה קצרצרה — כך אפשר לכוון את הרמפה בנגיעות.
-  sendSeq([BYTES[MASTER].on, BYTES[relay].on])
-    .catch(() => { releaseAll(true); say("ההפעלה נכשלה"); });
+  setDesired(relay);
 }
 
-/* immediate=true בעצירת חירום/תקלה — שם לא ממתינים לפעימה מינימלית. */
+/* immediate=true בעצירת חירום/תקלה — בלי המתנה לפעימה מזערית. */
 function stopRelay(immediate){
   if (active === null) return;
-  const r = active;
-  active = null;                       // מנקים מיד — מונע מרוץ מצבים
+  active = null;
   clearTimeout(holdTimer); clearInterval(watchTimer);
   renderConn("connected", "מוכן");
   buzz([6, 40, 6]);
-
-  // נגיעה קצרה: משלימים אורך פעימה מינימלי כדי שהרמפה תזוז מעט.
-  // בלי זה ההדלקה והכיבוי מגיעים כמעט יחד והממסר בקושי נוגע.
-  const elapsed = Date.now() - startedAt;
-  const waitBefore = immediate ? 0 : Math.max(0, (cfg.minPulseMs || 0) - elapsed);
-
-  // התנועה נעצרת ראשונה, אחריה הראשי — גם כאן רצף אטומי
-  sendSeq([BYTES[r].off, BYTES[MASTER].off], { critical: true, waitBefore })
-    .catch(() => say("שים לב: העצירה לא אושרה"));
+  setDesired(null, { immediate: !!immediate });
 }
 function releaseAll(immediate){ keys.forEach((k) => k.classList.remove("is-active")); stopRelay(immediate); }
 
@@ -618,9 +646,17 @@ async function stopAll(silent){
   active = null;
   keys.forEach((k) => k.classList.remove("is-active"));
   buzz([20, 40, 20]);
+
+  // קודם מאפסים את היעד — כדי שהמנוע לא ינסה להדליק שוב אחרינו
+  desired = null;
+  immediateOff = true;
+  applied = null;
+  masterOn = false;
+
   if (!ble.connected) { if (!silent) say("אין קשר — לא נשלחה עצירה"); return; }
-  // רצף אטומי אחד — שום פקודה לא יכולה להשתחל בין הכיבויים
-  try { await sendSeq([1, 2, 3, 4, 5].map((r) => BYTES[r].off), { critical: true }); } catch {}
+  // סחיפה מלאה: מכבים את כל הממסרים ללא תלות במצב שנרשם
+  for (const r of [1, 2, 3, 4, 5]) { try { await writeOnce(BYTES[r].off, true); } catch {} }
+  immediateOff = false;
   renderConn("connected", silent ? "מוכן" : "עצירת חירום בוצעה");
 }
 
@@ -649,7 +685,11 @@ keys.forEach((k) => {
 
 /* רשתות ביטחון: כל הסחה מהאפליקציה = עצירה */
 ["blur", "pagehide"].forEach((ev) => window.addEventListener(ev, () => releaseAll(true)));
-document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(true); else keepAwake(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) releaseAll(true);
+  else { keepAwake(); retryNow(); }
+});
+window.addEventListener("focus", retryNow);
 $("#estop").onclick = () => stopAll(false);
 
 /* ---------- Bluetooth ---------- */
@@ -704,9 +744,14 @@ async function autoConnect(){
   renderConn("idle", "התחבר לרמפה");
 }
 
+const withTimeout = (p, ms) => Promise.race([
+  p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))
+]);
+
 async function openGatt(){
   renderConn("connecting", "מתחבר…");
-  const server = await ble.device.gatt.connect();
+  // בלי פסק זמן, ניסיון מול מכשיר מחוץ לטווח עלול להישאר תלוי לנצח
+  const server = await withTimeout(ble.device.gatt.connect(), 10000);
   ble.server = server;
   try {
     const svc = await server.getPrimaryService(cfg.svc);
@@ -724,15 +769,47 @@ async function openGatt(){
 
 function onDrop(){
   ble.connected = false; ble.chr = null; active = null;
+  desired = null; applied = null; masterOn = false; immediateOff = false;   // איפוס המנוע
   clearTimeout(holdTimer); clearInterval(watchTimer);
   keys.forEach((k) => k.classList.remove("is-active"));
   if (ble.userStop) { renderConn("idle", "התחבר לרמפה"); return; }
-  renderConn("connecting", "הקשר נפל — מתחבר מחדש…");
-  if (ble.retries++ < 4) setTimeout(() => openGatt().catch(() => renderConn("idle", "התחבר לרמפה")), 800 * ble.retries);
-  else renderConn("idle", "התחבר לרמפה");
+  renderConn("connecting", "מחוץ לטווח — מחפש את הרמפה…");
+  reconnectDelay = 1000;
+  scheduleReconnect();
+}
+
+/* ---------- חיבור מחדש מתמשך ----------
+   יציאה מהטווח וחזרה אליו: מנסים שוב ושוב עם השהיה שגדלה בהדרגה
+   ונעצרת על 6 שניות. לא מוותרים אחרי מספר ניסיונות, כי "יצאתי לרגע
+   וחזרתי" הוא בדיוק המקרה הנפוץ. עוצרים רק אם המשתמש ניתק ידנית. */
+let reconnectTimer = null;
+let reconnectDelay = 1000;
+
+function scheduleReconnect(){
+  clearTimeout(reconnectTimer);
+  if (ble.userStop || !ble.device || ble.connected) return;
+  reconnectTimer = setTimeout(async () => {
+    if (ble.userStop || ble.connected) return;
+    try {
+      await openGatt();
+      reconnectDelay = 1000;                 // הצליח — מאפסים להשהיה קצרה
+    } catch {
+      reconnectDelay = Math.min(Math.round(reconnectDelay * 1.6), 6000);
+      renderConn("connecting", "מחוץ לטווח — מחפש את הרמפה…");
+      scheduleReconnect();
+    }
+  }, reconnectDelay);
+}
+
+/* חזרה לאפליקציה = ניסיון מיידי, בלי לחכות לתור ההשהיות */
+function retryNow(){
+  if (ble.userStop || ble.connected || !ble.device) return;
+  reconnectDelay = 300;
+  scheduleReconnect();
 }
 function disconnect(){
   ble.userStop = true;
+  clearTimeout(reconnectTimer);
   stopAll(true).finally(() => { try { ble.device?.gatt?.disconnect(); } catch {} });
 }
 async function keepAwake(){
@@ -917,7 +994,23 @@ renderConn("idle", "התחבר לרמפה");
 /* Service Worker — קובץ אמיתי, אחרת ההתקנה לא מוצעת בכלל */
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      // בדיקת עדכון בכל פתיחה — כך גרסה חדשה נתפסת מיד
+      reg.update().catch(() => {});
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener("statechange", () => {
+          // גרסה חדשה מוכנה ויש כבר SW פעיל => רענון אוטומטי חד-פעמי
+          if (nw.state === "installed" && navigator.serviceWorker.controller) {
+            if (!sessionStorage.getItem("lr-reloaded")) {
+              sessionStorage.setItem("lr-reloaded", "1");
+              location.reload();
+            }
+          }
+        });
+      });
+    }).catch(() => {});
   });
 }
 </script>
