@@ -401,6 +401,8 @@ details[open] summary::after{transform:rotate(180deg);}
       <option value="text">טקסט</option>
     </select>
 
+    <p class="t-help" style="margin-top:var(--s4)">כל פעולה מדליקה שני ממסרים יחד:<br>
+      פתיחה = 1+4 · סגירה = 2+4 · הרמה = 3+2 · הנמכה = 3+1</p>
     <div id="cmds"></div>
 
     <div class="row">
@@ -415,7 +417,7 @@ details[open] summary::after{transform:rotate(180deg);}
   </details>
 
   <button class="btn btn-ghost" id="close-sheet" style="margin-top:var(--s5)">סגירה</button>
-  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 4.7</p>
+  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 5.0</p>
 </div>
 
 <script>
@@ -468,8 +470,7 @@ const DEFAULTS = {
     1: { on: "A00101A2", off: "A00100A1" },
     2: { on: "A00201A3", off: "A00200A2" },
     3: { on: "A00301A4", off: "A00300A3" },
-    4: { on: "A00401A5", off: "A00400A4" },
-    5: { on: "A00501A6", off: "A00500A5" }
+    4: { on: "A00401A5", off: "A00400A4" }
   }
 };
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -492,7 +493,7 @@ function encode(str){
 let BYTES = {};
 function compile(){
   BYTES = {};
-  for (const r of [1, 2, 3, 4, 5]) {
+  for (const r of [1, 2, 3, 4]) {
     BYTES[r] = {
       on: encode(cfg.cmd[r].on), off: encode(cfg.cmd[r].off),
       onEmpty: !String(cfg.cmd[r].on).trim(), offEmpty: !String(cfg.cmd[r].off).trim()
@@ -505,7 +506,14 @@ compile();
 const ble = { device: null, server: null, chr: null, connected: false, userStop: false, retries: 0 };
 let active = null, holdTimer = null, watchTimer = null, wakeLock = null;
 const keys = [...document.querySelectorAll(".key")];
-const MASTER = 5;
+/* כל פעולה מדליקה זוג ממסרים בו-זמנית (במקום ממסר "ראשי" נפרד).
+   כך מספיק כרטיס 4 ממסרים ואין צורך בגשרי חיווט. */
+const PAIRS = {
+  1: [1, 4],   // פתיחה
+  2: [2, 4],   // סגירה
+  3: [3, 2],   // הרמה
+  4: [3, 1]    // הורדה
+};
 
 /* ---------- חיווי ---------- */
 function renderConn(state, text){
@@ -557,9 +565,9 @@ async function writeOnce(bytes, critical){
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-let desired = null;      // לאן צריך להגיע: null = הכל כבוי, או מספר ממסר
-let applied = null;      // איזה כיוון נכתב בפועל לחומרה
-let masterOn = false;    // מצב הממסר הראשי — נעקב בנפרד, אחרת הוא נשאר דלוק
+let desired = null;      // לאן צריך להגיע: null = הכל כבוי, או מספר פעולה
+let applied = null;      // איזו פעולה נכתבה בפועל לחומרה
+let onRelays = [];       // אילו ממסרים דלוקים כרגע — נעקב כדי לכבות בדיוק אותם
 let onSince = 0;         // מתי הודלק, לצורך הפעימה המזערית
 let immediateOff = false;// עצירת חירום: בלי המתנה לפעימה
 let pumping = false;
@@ -570,7 +578,7 @@ function setDesired(state, { immediate = false } = {}){
   pump();
 }
 
-const settled = () => applied === desired && !(desired === null && masterOn);
+const settled = () => applied === desired && !(desired === null && onRelays.length);
 
 async function pump(){
   if (pumping) return;
@@ -580,12 +588,14 @@ async function pump(){
       const target = desired;
 
       if (target !== null) {
-        if (!masterOn) { await writeOnce(BYTES[MASTER].on); masterOn = true; }
-        // אם בינתיים נבחר כיוון *אחר* — נוטשים, כדי לא להזיז לכיוון הלא נכון.
-        // אם פשוט שוחרר (desired=null) — משלימים בכוונה, כדי שנגיעה
-        // קצרצרה תיתן תזוזה במקום להיבלע בזמן הכתיבה של הראשי.
+        // מדליקים את שני הממסרים של הפעולה. בין השניים בודקים רק אם
+        // נבחרה פעולה *אחרת* — אז נוטשים כדי לא להזיז לכיוון הלא נכון.
+        // אם פשוט שוחרר, משלימים בכוונה כדי שנגיעה קצרה תזיז.
+        for (const r of PAIRS[target]) {
+          if (desired !== null && desired !== target) break;
+          if (!onRelays.includes(r)) { await writeOnce(BYTES[r].on); onRelays.push(r); }
+        }
         if (desired !== null && desired !== target) continue;
-        await writeOnce(BYTES[target].on);
         applied = target;
         onSince = Date.now();
         continue;
@@ -598,10 +608,14 @@ async function pump(){
         // נלחץ שוב אותו כיוון בזמן ההמתנה — נשארים דלוקים (תנועה רציפה)
         if (desired === applied) continue;
       }
-      const was = applied;
       applied = null;
-      if (was !== null) await writeOnce(BYTES[was].off, true);
-      if (masterOn) { await writeOnce(BYTES[MASTER].off, true); masterOn = false; }
+      // מכבים בדיוק את מה שהודלק, ומנקים אחד-אחד כדי שגם כשל
+      // באמצע לא ישאיר ממסר "רשום כדלוק" בטעות
+      while (onRelays.length) {
+        const r = onRelays[onRelays.length - 1];
+        await writeOnce(BYTES[r].off, true);
+        onRelays.pop();
+      }
       immediateOff = false;
     }
   } catch {
@@ -616,7 +630,7 @@ async function pump(){
 /* ---------- הפעלה / עצירה ---------- */
 function startRelay(relay, name){
   if (active !== null || !ble.connected) return;
-  if (BYTES[relay].onEmpty || BYTES[relay].offEmpty) { say("חסרה הגדרת פקודה"); return; }
+  if (PAIRS[relay].some((r) => BYTES[r].onEmpty || BYTES[r].offEmpty)) { say("חסרה הגדרת פקודה"); return; }
 
   active = relay;
   renderConn("connected", `${name} · פועל`);
@@ -651,11 +665,11 @@ async function stopAll(silent){
   desired = null;
   immediateOff = true;
   applied = null;
-  masterOn = false;
+  onRelays = [];
 
   if (!ble.connected) { if (!silent) say("אין קשר — לא נשלחה עצירה"); return; }
   // סחיפה מלאה: מכבים את כל הממסרים ללא תלות במצב שנרשם
-  for (const r of [1, 2, 3, 4, 5]) { try { await writeOnce(BYTES[r].off, true); } catch {} }
+  for (const r of [1, 2, 3, 4]) { try { await writeOnce(BYTES[r].off, true); } catch {} }
   immediateOff = false;
   renderConn("connected", silent ? "מוכן" : "עצירת חירום בוצעה");
 }
@@ -769,7 +783,7 @@ async function openGatt(){
 
 function onDrop(){
   ble.connected = false; ble.chr = null; active = null;
-  desired = null; applied = null; masterOn = false; immediateOff = false;   // איפוס המנוע
+  desired = null; applied = null; onRelays = []; immediateOff = false;   // איפוס המנוע
   clearTimeout(holdTimer); clearInterval(watchTimer);
   keys.forEach((k) => k.classList.remove("is-active"));
   if (ble.userStop) { renderConn("idle", "התחבר לרמפה"); return; }
@@ -868,8 +882,8 @@ $("#open-settings").onclick = openSheet;
 $("#close-sheet").onclick = closeSheet;
 $("#scrim").onclick = closeSheet;
 
-const NAMES = { 1: "פתיחה", 2: "סגירה", 3: "הרמה", 4: "הנמכה", 5: "ראשי (אוטומטי)" };
-$("#cmds").innerHTML = [1, 2, 3, 4, 5].map((r) => `
+const NAMES = { 1: "ממסר 1", 2: "ממסר 2", 3: "ממסר 3", 4: "ממסר 4" };
+$("#cmds").innerHTML = [1, 2, 3, 4].map((r) => `
   <label>${NAMES[r]}</label>
   <div class="row">
     <input data-c="${r}-on" placeholder="הפעלה" spellcheck="false">
@@ -880,14 +894,14 @@ function fillForm(){
   $("#svc").value = cfg.svc; $("#chr").value = cfg.chr;
   $("#enc").value = cfg.enc; $("#hold").value = Math.round(cfg.holdMs / 1000);
   $("#pulse").value = cfg.minPulseMs ?? 150;
-  [1, 2, 3, 4, 5].forEach((r) => {
+  [1, 2, 3, 4].forEach((r) => {
     document.querySelector(`[data-c="${r}-on"]`).value = cfg.cmd[r].on;
     document.querySelector(`[data-c="${r}-off"]`).value = cfg.cmd[r].off;
   });
 }
 $("#save").onclick = () => {
   if ($("#enc").value === "hex") {
-    for (const r of [1, 2, 3, 4, 5]) for (const d of ["on", "off"]) {
+    for (const r of [1, 2, 3, 4]) for (const d of ["on", "off"]) {
       const v = document.querySelector(`[data-c="${r}-${d}"]`).value.trim();
       if (!v) continue;
       const digits = v.replace(/[^0-9a-fA-F]/g, "");
@@ -899,7 +913,7 @@ $("#save").onclick = () => {
   cfg.enc = $("#enc").value;
   cfg.holdMs = Math.max(1, +$("#hold").value || 25) * 1000;
   cfg.minPulseMs = Math.min(600, Math.max(0, +$("#pulse").value || 0));
-  [1, 2, 3, 4, 5].forEach((r) => {
+  [1, 2, 3, 4].forEach((r) => {
     cfg.cmd[r] = {
       on: document.querySelector(`[data-c="${r}-on"]`).value.trim(),
       off: document.querySelector(`[data-c="${r}-off"]`).value.trim()
