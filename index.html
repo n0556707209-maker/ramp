@@ -98,7 +98,9 @@ body{
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none;}
 .dot.live{background:var(--live);animation:pulse 1s ease-in-out infinite;}
 @keyframes pulse{50%{opacity:.3}}
-.status .label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.status .label{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;overflow:hidden;}
+.truck-name{font-size:14px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.truck-state{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .link-btn{
   background:none;border:none;cursor:pointer;font-family:inherit;
   font-size:12px;font-weight:600;color:var(--text-3);padding:var(--s1) var(--s2);
@@ -282,7 +284,7 @@ details[open] summary::after{transform:rotate(180deg);}
     <p class="t-help" style="text-align:center;margin-top:var(--s2)">הזן/י את הקוד שקיבלת</p>
 
     <div class="pin" id="pin" role="status" aria-label="ספרות שהוזנו">
-      <i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i><i></i><i></i>
     </div>
     <p class="err" id="code-err" hidden>קוד שגוי — נסה/י שוב</p>
 
@@ -305,6 +307,29 @@ details[open] summary::after{transform:rotate(180deg);}
        style="text-decoration:none;margin-top:var(--s5)">
       אין לך קוד? הזמנת רכיב
     </a>
+  </div>
+</div>
+
+<!-- ============ שגיאת רישוי ============ -->
+<div class="modal" id="lic" hidden>
+  <div class="card">
+    <h2 class="t-title">הקוד לא מתאים למודול הזה</h2>
+    <p class="t-help" style="margin-top:var(--s2)" id="lic-msg"></p>
+    <p class="t-help" style="margin-top:var(--s3)">כל רכיב מגיע עם קוד משלו. קוד של רכיב אחר לא יפעיל את המודול הזה.</p>
+    <button class="btn btn-primary" id="lic-retry" style="margin-top:var(--s4)">הזנת קוד מחדש</button>
+    <a class="btn btn-ghost" id="lic-order" target="_blank" rel="noopener" style="text-decoration:none">פנייה בוואטסאפ</a>
+  </div>
+</div>
+
+<!-- ============ שיוך משאית ============ -->
+<div class="modal" id="nick" hidden>
+  <div class="card">
+    <h2 class="t-title">איזו משאית זו?</h2>
+    <p class="t-help" style="margin-top:var(--s2)">תן/י שם כדי שתדע/י תמיד לאיזו רמפה את/ה מחובר/ת. חשוב במיוחד כשיש כמה משאיות באותו מקום.</p>
+    <p class="t-help" id="nick-detected" style="margin-top:var(--s3)"></p>
+    <input id="nick-input" type="text" maxlength="24" placeholder="למשל: המשאית של אריק" style="margin-top:var(--s4)">
+    <button class="btn btn-primary" id="nick-save" style="margin-top:var(--s4)">שמירה</button>
+    <button class="btn btn-ghost" id="nick-skip">דלג/י</button>
   </div>
 </div>
 
@@ -382,6 +407,20 @@ details[open] summary::after{transform:rotate(180deg);}
   <h2 class="t-title">הגדרות</h2>
   <p class="t-help">ברוב המקרים אין צורך לשנות כאן דבר.</p>
 
+  <label style="margin-top:var(--s4)">משאית משויכת</label>
+  <p class="t-help" id="truck-info" style="margin-bottom:var(--s2)"></p>
+  <div class="row">
+    <button class="btn btn-ghost" id="truck-rename">שינוי שם</button>
+    <button class="btn btn-ghost" id="truck-change">החלפת משאית</button>
+  </div>
+
+  <label style="margin-top:var(--s4)">סוג רמפה</label>
+  <div class="row">
+    <button class="btn btn-ghost" id="rt-standard" data-rt="standard">רגילה</button>
+    <button class="btn btn-ghost" id="rt-dolandia" data-rt="dolandia">דהולנדיה</button>
+  </div>
+  <p class="err">בחירה שגויה עלולה לגרום לתנועה לא צפויה — יש לוודא עם ההתקנה לפני שימוש.</p>
+
   <button class="btn btn-ghost" id="install-btn" hidden style="margin-top:var(--s4)">התקנת האפליקציה במסך הבית</button>
   <button class="btn btn-ghost" id="scan-btn" style="margin-top:var(--s2)">זיהוי אוטומטי של המודול</button>
   <div id="scan-list"></div>
@@ -401,8 +440,7 @@ details[open] summary::after{transform:rotate(180deg);}
       <option value="text">טקסט</option>
     </select>
 
-    <p class="t-help" style="margin-top:var(--s4)">כל פעולה מדליקה שני ממסרים יחד:<br>
-      פתיחה = 1+4 · סגירה = 2+4 · הרמה = 3+2 · הנמכה = 3+1</p>
+    <p class="t-help" id="pairs-desc" style="margin-top:var(--s4)"></p>
     <div id="cmds"></div>
 
     <div class="row">
@@ -417,7 +455,7 @@ details[open] summary::after{transform:rotate(180deg);}
   </details>
 
   <button class="btn btn-ghost" id="close-sheet" style="margin-top:var(--s5)">סגירה</button>
-  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 5.0</p>
+  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 8.0</p>
 </div>
 
 <script>
@@ -441,7 +479,49 @@ $("#order-link").href = `https://wa.me/${ORDER_PHONE}?text=${encodeURIComponent(
 /* ---------- קוד גישה ----------
    בדיקה בצד הלקוח בלבד: מסננת משתמש מזדמן, לא הגנה קריפטוגרפית.
    נכתב ב-JS רגיל (לא crypto.subtle) כדי לעבוד גם בדפדפנים פנימיים. */
-const CODE_HASHES = ["254beb8186d0d2e9"];   // 1960
+/* ---------- רישוי לפי מודול ----------
+   הקוד אינו שייך למשתמש אלא למודול הפיזי שנמכר. הוא נגזר משם המודול,
+   כך שקוד שהועתק לאדם אחר פשוט לא יתאים למודול שלו.
+
+   נובע מזה גם פתרון לנהגים מתחלפים: הקוד שייך למשאית, לא לאדם —
+   כל נהג שעולה על אותה משאית משתמש באותו קוד, בלי ניהול הרשאות.
+
+   תנאי הכרחי: לכל מודול חייב להיות שם ייחודי (AT+NAME). אם כל
+   המודולים משדרים "BT05", כולם יקבלו את אותו קוד והרישוי חסר ערך.
+
+   מגבלה שחשוב להכיר: הקוד רץ בצד הלקוח וקוד המקור גלוי. מי שיודע
+   לקרוא JavaScript יכול לחלץ את הנוסחה ולחשב קוד לכל מודול. זה עוצר
+   העתקה מזדמנת בין לקוחות, לא יריב טכני נחוש. לחסימה אמיתית נדרשת
+   הפעלה חד-פעמית מול שרת (ראו הסבר בשיחה). */
+const LICENSE_SALT = "LEVIRAMP-2026-K7";   // סוד — לשנות מייצר קודים חדשים לכולם
+const MASTER_CODE = "1960";                // קוד יצרן, פותח כל מודול. למחוק אם דולף.
+
+function mix32(h){
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16; return h >>> 0;
+}
+function h32(str, seed){
+  let h = seed >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193);
+    h = (h << 13) | (h >>> 19);
+  }
+  return mix32(h);
+}
+/* שם מודול -> קוד בן 6 ספרות */
+function licenseCode(moduleName){
+  const base = LICENSE_SALT + "|" + String(moduleName || "").trim().toUpperCase();
+  const a = h32(base, 0x811c9dc5), b = h32(base, 0x9e3779b9);
+  return String(mix32(a ^ Math.imul(b, 0x27220a95)) % 1000000).padStart(6, "0");
+}
+/* האם הקוד השמור מתאים למודול שאליו התחברנו? */
+function licenseOk(moduleName){
+  const c = String(cfg.code || "").trim();
+  if (!c) return false;
+  if (c === MASTER_CODE) return true;
+  return c === licenseCode(moduleName);
+}
 function codeHash(str){
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
@@ -449,7 +529,9 @@ function codeHash(str){
   for (let i = str.length - 1; i >= 0; i--) { g ^= str.charCodeAt(i); g = Math.imul(g, 0x85ebca6b); }
   return (h >>> 0).toString(16).padStart(8, "0") + (g >>> 0).toString(16).padStart(8, "0");
 }
-const codeOk = (c) => { const n = String(c || "").trim().toUpperCase(); return !!n && CODE_HASHES.includes(codeHash(n)); };
+/* מסך הפתיחה רק אוסף את הקוד — האימות האמיתי קורה בחיבור למודול,
+   כי רק אז ידוע מול איזה מודול צריך לבדוק. קוד באורך תקין מתקבל. */
+const codeOk = (c) => { const n = String(c || "").trim(); return n === MASTER_CODE || n.length === 6; };
 
 /* ---------- אחסון ---------- */
 const K_CFG = "leviramp.v4.cfg", K_UNLOCK = "leviramp.v4.unlock", K_TERMS = "leviramp.v4.terms";
@@ -459,18 +541,22 @@ const store = {
 };
 
 /* ברירת מחדל: פרוטוקול HEX הנפוץ בכרטיסי ממסרים — עובד מיד, בלי הגדרות.
-   ממסר 5 = "ראשי", נשלח אוטומטית יחד עם כל פעולה. */
+   ממסר 5 מוגדר תמיד (בשימוש רק בסוג רמפה "דהולנדיה" — ראו RAMP_TYPES). */
 const DEFAULTS = {
   svc: "0000ffe0-0000-1000-8000-00805f9b34fb",
   chr: "0000ffe1-0000-1000-8000-00805f9b34fb",
   enc: "hex",
   holdMs: 25000,
   minPulseMs: 150,   // אורך תנועה מינימלי בנגיעה קצרה
+  rampType: "standard",   // "standard" | "dolandia" — ראו RAMP_TYPES למטה
+  truck: null,            // { id, name, nick } — המשאית המשויכת למכשיר הזה
+  code: "",               // קוד הרישוי שהוזן — נבדק מול שם המודול בכל חיבור
   cmd: {
     1: { on: "A00101A2", off: "A00100A1" },
     2: { on: "A00201A3", off: "A00200A2" },
     3: { on: "A00301A4", off: "A00300A3" },
-    4: { on: "A00401A5", off: "A00400A4" }
+    4: { on: "A00401A5", off: "A00400A4" },
+    5: { on: "A00501A6", off: "A00500A5" }
   }
 };
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -493,7 +579,7 @@ function encode(str){
 let BYTES = {};
 function compile(){
   BYTES = {};
-  for (const r of [1, 2, 3, 4]) {
+  for (const r of [1, 2, 3, 4, 5]) {
     BYTES[r] = {
       on: encode(cfg.cmd[r].on), off: encode(cfg.cmd[r].off),
       onEmpty: !String(cfg.cmd[r].on).trim(), offEmpty: !String(cfg.cmd[r].off).trim()
@@ -506,22 +592,28 @@ compile();
 const ble = { device: null, server: null, chr: null, connected: false, userStop: false, retries: 0 };
 let active = null, holdTimer = null, watchTimer = null, wakeLock = null;
 const keys = [...document.querySelectorAll(".key")];
-/* כל פעולה מדליקה זוג ממסרים בו-זמנית (במקום ממסר "ראשי" נפרד).
-   כך מספיק כרטיס 4 ממסרים ואין צורך בגשרי חיווט. */
-const PAIRS = {
-  1: [1, 4],   // פתיחה
-  2: [2, 4],   // סגירה
-  3: [3, 2],   // הרמה
-  4: [3, 1]    // הורדה
+/* כל פעולה מדליקה קבוצת ממסרים בו-זמנית. שני סוגי רמפה נתמכים
+   באותה אפליקציה — לפי חיווט הלקוח, לא שתי אפליקציות נפרדות. */
+const RAMP_TYPES = {
+  standard: { 1: [1, 4], 2: [2, 4], 3: [3, 2], 4: [3, 1] },   // פתיחה·סגירה·הרמה·הורדה
+  dolandia: { 1: [1, 4], 2: [2, 4], 3: [3, 2], 4: [5] }        // זהה, חוץ מהורדה = ממסר 5 בלבד
 };
+let PAIRS = RAMP_TYPES[cfg.rampType] || RAMP_TYPES.standard;
 
 /* ---------- חיווי ---------- */
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
 function renderConn(state, text){
   const slot = $("#conn-slot");
   if (state === "connected") {
+    // שם המשאית מוצג תמיד ובולט — כדי שלעולם לא יהיה ספק
+    // לאיזו רמפה השלט מחובר, גם כשיש כמה משאיות באותו מקום.
     slot.innerHTML = `<div class="status">
         <span class="dot ${active !== null ? "live" : ""}"></span>
-        <span class="label t-body">${text}</span>
+        <span class="label">
+          <span class="truck-name">${esc(truckLabel())}</span>
+          <span class="truck-state t-help">${esc(text)}</span>
+        </span>
         <button class="link-btn" id="disc">נתק</button>
       </div>`;
     $("#disc").onclick = disconnect;
@@ -571,6 +663,7 @@ let onRelays = [];       // אילו ממסרים דלוקים כרגע — נע
 let onSince = 0;         // מתי הודלק, לצורך הפעימה המזערית
 let immediateOff = false;// עצירת חירום: בלי המתנה לפעימה
 let pumping = false;
+let pumpFails = 0;       // כשלי כתיבה רצופים — קובע את ההשהיה בין ניסיונות
 
 function setDesired(state, { immediate = false } = {}){
   desired = state;
@@ -598,6 +691,7 @@ async function pump(){
         if (desired !== null && desired !== target) continue;
         applied = target;
         onSince = Date.now();
+        pumpFails = 0;
         continue;
       }
 
@@ -617,13 +711,27 @@ async function pump(){
         onRelays.pop();
       }
       immediateOff = false;
+      pumpFails = 0;
     }
   } catch {
-    say("שים לב: הפקודה לא אושרה");
+    // כשל כתיבה. לא מוותרים — אבל גם לא מנסים בלולאה הדוקה, כי
+    // הצפת ה-BLE בניסיונות רק מחמירה ומרוקנת סוללה.
+    pumpFails++;
+    if (onRelays.length && pumpFails >= 3) {
+      // מצב חמור: ממסר עדיין דלוק והכיבוי לא עובר. אזהרה ברורה,
+      // כי המשמעות היא שהרמפה עלולה להמשיך לזוז.
+      say("⚠ העצירה לא עוברת — לחץ/י עצירת חירום או נתק/י מהמפסק");
+    } else {
+      say("שים לב: הפקודה לא אושרה");
+    }
   } finally {
     pumping = false;
-    // אם היעד השתנה בדיוק בזמן שיצאנו — מריצים שוב
-    if (ble.connected && !settled()) pump();
+    if (ble.connected && !settled()) {
+      // השהיה מדורגת בין ניסיונות (0 בהצלחה, עד 2 שניות בכשל מתמשך)
+      const backoff = Math.min(150 * pumpFails, 2000);
+      if (backoff > 0) setTimeout(pump, backoff);
+      else pump();
+    }
   }
 }
 
@@ -669,7 +777,7 @@ async function stopAll(silent){
 
   if (!ble.connected) { if (!silent) say("אין קשר — לא נשלחה עצירה"); return; }
   // סחיפה מלאה: מכבים את כל הממסרים ללא תלות במצב שנרשם
-  for (const r of [1, 2, 3, 4]) { try { await writeOnce(BYTES[r].off, true); } catch {} }
+  for (const r of [1, 2, 3, 4, 5]) { try { await writeOnce(BYTES[r].off, true); } catch {} }
   immediateOff = false;
   renderConn("connected", silent ? "מוכן" : "עצירת חירום בוצעה");
 }
@@ -729,7 +837,17 @@ async function connect(){
     });
     ble.device.addEventListener("gattserverdisconnected", onDrop);
     ble.userStop = false;
+
+    // משייכים את המכשיר הזה למשאית שנבחרה. device.id יציב לאורך זמן
+    // עבור האתר הזה — כך שמכאן והלאה נתחבר רק אליה, גם בצי משאיות
+    // שבו כל המודולים משדרים אותו שם.
+    const isNew = !cfg.truck || cfg.truck.id !== ble.device.id;
+    if (isNew) {
+      cfg.truck = { id: ble.device.id, name: ble.device.name || "מודול", nick: "" };
+      saveCfg();
+    }
     await openGatt();
+    if (isNew) askTruckNick();
   } catch (e) {
     const n = e?.name;
     renderConn("idle",
@@ -739,23 +857,38 @@ async function connect(){
   }
 }
 
-/* חיבור אוטומטי למכשיר שכבר אושר בעבר (מהפעם השנייה והלאה) */
+/* חיבור אוטומטי — אך ורק למשאית המשויכת.
+   קריטי בצי משאיות: אם נתחבר ל"הראשונה שעונה", אפשר להפעיל בטעות
+   רמפה של משאית אחרת שחונה לידנו. לכן מתחברים רק ל-id ששמור. */
 async function autoConnect(){
   if (!navigator.bluetooth?.getDevices) return;
+  if (!cfg.truck?.id) return;                 // עוד לא שויכה משאית
   let devices = [];
   try { devices = await navigator.bluetooth.getDevices(); } catch { return; }
-  if (!devices.length) return;
-  renderConn("connecting", "מתחבר…");
-  for (const d of devices) {
-    try {
-      ble.device = d;
-      d.addEventListener("gattserverdisconnected", onDrop);
-      ble.userStop = false;
-      await openGatt();
-      return;
-    } catch {}
+  const mine = devices.find((d) => d.id === cfg.truck.id);
+  if (!mine) return;                          // המשאית שלי לא בטווח/לא מאושרת
+  renderConn("connecting", `מתחבר · ${truckLabel()}`);
+  try {
+    ble.device = mine;
+    mine.addEventListener("gattserverdisconnected", onDrop);
+    ble.userStop = false;
+    await openGatt();
+  } catch {
+    renderConn("idle", idleLabel());
   }
-  renderConn("idle", "התחבר לרמפה");
+}
+
+/* השם שמוצג למשתמש: כינוי אם ניתן, אחרת שם המודול + סיומת מזהה */
+/* תווית כפתור החיבור: מזכירה לאיזו משאית נתחבר */
+function idleLabel(){
+  return cfg.truck ? `התחבר · ${truckLabel()}` : "התחבר לרמפה";
+}
+
+function truckLabel(){
+  if (!cfg.truck) return "רמפה";
+  if (cfg.truck.nick) return cfg.truck.nick;
+  const tail = String(cfg.truck.id || "").slice(-4);
+  return `${cfg.truck.name}${tail ? " ·" + tail : ""}`;
 }
 
 const withTimeout = (p, ms) => Promise.race([
@@ -776,6 +909,17 @@ async function openGatt(){
     renderConn("idle", "המודול לא תואם — פתח/י הגדרות");
     throw err;
   }
+  // אכיפת רישוי: רק עכשיו ידוע שם המודול, אז רק עכשיו אפשר לבדוק
+  // שהקוד שהוזן באמת שייך למודול הזה.
+  const modName = ble.device.name || "";
+  if (!licenseOk(modName)) {
+    try { ble.device.gatt.disconnect(); } catch {}
+    ble.connected = false; ble.chr = null;
+    ble.userStop = true;               // לא מנסים להתחבר מחדש בלולאה
+    showLicenseError(modName);
+    throw new Error("license");
+  }
+
   ble.connected = true; ble.retries = 0;
   await stopAll(true);                 // מתחילים ממצב ידוע: הכל כבוי
   keepAwake();
@@ -786,7 +930,7 @@ function onDrop(){
   desired = null; applied = null; onRelays = []; immediateOff = false;   // איפוס המנוע
   clearTimeout(holdTimer); clearInterval(watchTimer);
   keys.forEach((k) => k.classList.remove("is-active"));
-  if (ble.userStop) { renderConn("idle", "התחבר לרמפה"); return; }
+  if (ble.userStop) { renderConn("idle", idleLabel()); return; }
   renderConn("connecting", "מחוץ לטווח — מחפש את הרמפה…");
   reconnectDelay = 1000;
   scheduleReconnect();
@@ -882,26 +1026,101 @@ $("#open-settings").onclick = openSheet;
 $("#close-sheet").onclick = closeSheet;
 $("#scrim").onclick = closeSheet;
 
-const NAMES = { 1: "ממסר 1", 2: "ממסר 2", 3: "ממסר 3", 4: "ממסר 4" };
-$("#cmds").innerHTML = [1, 2, 3, 4].map((r) => `
+const NAMES = { 1: "ממסר 1", 2: "ממסר 2", 3: "ממסר 3", 4: "ממסר 4", 5: "ממסר 5" };
+$("#cmds").innerHTML = [1, 2, 3, 4, 5].map((r) => `
   <label>${NAMES[r]}</label>
   <div class="row">
     <input data-c="${r}-on" placeholder="הפעלה" spellcheck="false">
     <input data-c="${r}-off" placeholder="עצירה" spellcheck="false">
   </div>`).join("");
 
+function pairsText(){
+  const p = PAIRS;
+  return `פתיחה = ${p[1].join('+')} · סגירה = ${p[2].join('+')} · הרמה = ${p[3].join('+')} · הנמכה = ${p[4].join('+')}`;
+}
+/* ---------- שגיאת רישוי ---------- */
+function showLicenseError(moduleName){
+  $("#lic-msg").textContent = moduleName
+    ? `המודול שזוהה: ${moduleName}`
+    : "לא ניתן לקרוא את שם המודול.";
+  $("#lic-order").href = `https://wa.me/${ORDER_PHONE}?text=${encodeURIComponent(
+    `שלום, יש לי מודול ${moduleName || "(ללא שם)"} ואשמח לקבל את קוד ההפעלה`)}`;
+  $("#lic").hidden = false;
+  renderConn("idle", idleLabel());
+}
+$("#lic-retry").onclick = () => {
+  $("#lic").hidden = true;
+  cfg.code = ""; saveCfg();
+  store.set(K_UNLOCK, "0");
+  entry = ""; renderPin();
+  $("#lock").hidden = false;
+};
+
+/* ---------- שיוך משאית ---------- */
+function askTruckNick(){
+  if (!cfg.truck) return;
+  $("#nick-detected").textContent = `זוהה: ${cfg.truck.name} · ${String(cfg.truck.id).slice(-4)}`;
+  $("#nick-input").value = cfg.truck.nick || "";
+  $("#nick").hidden = false;
+  setTimeout(() => $("#nick-input").focus(), 200);
+}
+$("#nick-save").onclick = () => {
+  if (cfg.truck) { cfg.truck.nick = $("#nick-input").value.trim().slice(0, 24); saveCfg(); }
+  $("#nick").hidden = true;
+  updateTruckUI();
+  if (ble.connected) renderConn("connected", `מוכן · ${truckLabel()}`);
+};
+$("#nick-skip").onclick = () => { $("#nick").hidden = true; updateTruckUI(); };
+
+function updateTruckUI(){
+  const el = $("#truck-info");
+  if (!el) return;
+  el.textContent = cfg.truck
+    ? `${truckLabel()}  (מודול ${cfg.truck.name})`
+    : "עוד לא שויכה משאית — לחצ/י על \"התחבר לרמפה\"";
+}
+$("#truck-rename").onclick = () => {
+  if (!cfg.truck) { alert("יש להתחבר למשאית פעם אחת לפני שאפשר לתת לה שם."); return; }
+  closeSheet(); askTruckNick();
+};
+$("#truck-change").onclick = () => {
+  if (!confirm("להחליף את המשאית המשויכת?\n\nהחיבור הנוכחי ינותק ותתבקש/י לבחור מודול מחדש.")) return;
+  ble.userStop = true;
+  clearTimeout(reconnectTimer);
+  stopAll(true).finally(() => {
+    try { ble.device?.gatt?.disconnect(); } catch {}
+    cfg.truck = null; saveCfg();
+    updateTruckUI();
+    closeSheet();
+    renderConn("idle", idleLabel());
+  });
+};
+
+function updateRampTypeUI(){
+  const isDol = cfg.rampType === "dolandia";
+  $("#rt-standard").classList.toggle("btn-primary", !isDol);
+  $("#rt-standard").classList.toggle("btn-ghost", isDol);
+  $("#rt-dolandia").classList.toggle("btn-primary", isDol);
+  $("#rt-dolandia").classList.toggle("btn-ghost", !isDol);
+  $("#pairs-desc").textContent = pairsText();
+}
+$("#rt-standard").onclick = () => { cfg.rampType = "standard"; PAIRS = RAMP_TYPES.standard; saveCfg(); updateRampTypeUI(); };
+$("#rt-dolandia").onclick = () => { cfg.rampType = "dolandia"; PAIRS = RAMP_TYPES.dolandia; saveCfg(); updateRampTypeUI(); };
+
 function fillForm(){
   $("#svc").value = cfg.svc; $("#chr").value = cfg.chr;
   $("#enc").value = cfg.enc; $("#hold").value = Math.round(cfg.holdMs / 1000);
   $("#pulse").value = cfg.minPulseMs ?? 150;
-  [1, 2, 3, 4].forEach((r) => {
+  updateRampTypeUI();
+  updateTruckUI();
+  [1, 2, 3, 4, 5].forEach((r) => {
     document.querySelector(`[data-c="${r}-on"]`).value = cfg.cmd[r].on;
     document.querySelector(`[data-c="${r}-off"]`).value = cfg.cmd[r].off;
   });
 }
 $("#save").onclick = () => {
   if ($("#enc").value === "hex") {
-    for (const r of [1, 2, 3, 4]) for (const d of ["on", "off"]) {
+    for (const r of [1, 2, 3, 4, 5]) for (const d of ["on", "off"]) {
       const v = document.querySelector(`[data-c="${r}-${d}"]`).value.trim();
       if (!v) continue;
       const digits = v.replace(/[^0-9a-fA-F]/g, "");
@@ -913,7 +1132,7 @@ $("#save").onclick = () => {
   cfg.enc = $("#enc").value;
   cfg.holdMs = Math.max(1, +$("#hold").value || 25) * 1000;
   cfg.minPulseMs = Math.min(600, Math.max(0, +$("#pulse").value || 0));
-  [1, 2, 3, 4].forEach((r) => {
+  [1, 2, 3, 4, 5].forEach((r) => {
     cfg.cmd[r] = {
       on: document.querySelector(`[data-c="${r}-on"]`).value.trim(),
       off: document.querySelector(`[data-c="${r}-off"]`).value.trim()
@@ -944,7 +1163,7 @@ window.addEventListener("appinstalled", () => { installPrompt = null; $("#instal
 /* ---------- כניסה ---------- */
 /* ---------- כניסה עם מקלדת מובנית ---------- */
 let entry = "";
-const PIN_LEN = 4;
+const PIN_LEN = 6;   // קוד רישוי בן 6 ספרות
 
 function renderPin(){
   const dots = $("#pin").children;
@@ -958,6 +1177,7 @@ function pinError(){
 }
 function unlock(){
   if (codeOk(entry)) {
+    cfg.code = entry; saveCfg();
     store.set(K_UNLOCK, "1");
     $("#lock").hidden = true;
     entry = ""; renderPin(); $("#code-err").hidden = true;
@@ -996,14 +1216,14 @@ function afterUnlock(){
 $("#terms-go").onclick = () => { store.set(K_TERMS, "1"); $("#terms").hidden = true; boot(); };
 
 function boot(){
-  renderConn("idle", "התחבר לרמפה");
+  renderConn("idle", idleLabel());
   try { Promise.resolve(autoConnect()).catch(() => {}); } catch {}
 }
 
 /* ---------- אתחול ---------- */
 if (store.get(K_UNLOCK) === "1") { $("#lock").hidden = true; afterUnlock(); }
 else { $("#lock").hidden = false; renderPin(); }
-renderConn("idle", "התחבר לרמפה");
+renderConn("idle", idleLabel());
 
 /* Service Worker — קובץ אמיתי, אחרת ההתקנה לא מוצעת בכלל */
 if ("serviceWorker" in navigator) {
