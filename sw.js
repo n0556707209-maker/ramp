@@ -9,7 +9,7 @@
    הגרסה הקודמת השתמשה במטמון-תחילה גם ל-HTML, ולכן משתמש יכול היה
    להישאר תקוע על גרסה ישנה גם אחרי שהעלינו חדשה. */
 
-const CACHE = 'levi-ramp-v8-0';
+const CACHE = 'levi-ramp-v8-1';
 const ASSETS = [
   './',
   './index.html',

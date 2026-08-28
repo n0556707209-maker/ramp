@@ -452,10 +452,29 @@ details[open] summary::after{transform:rotate(180deg);}
     <p class="t-help" style="margin-top:var(--s2)">פעימה מזערית: כמה זמן הרמפה זזה בנגיעה קצרה. 0 = בדיוק כאורך הלחיצה.</p>
 
     <button class="btn btn-primary" id="save" style="margin-top:var(--s5)">שמירה</button>
+
+    <label for="eol" style="margin-top:var(--s5)">סיום שורה (לבדיקת פקודה בלבד)</label>
+    <select id="eol">
+      <option value="">ללא</option>
+      <option value="\n">LF</option>
+      <option value="\r\n" selected>CR+LF</option>
+    </select>
+
+    <label for="raw" style="margin-top:var(--s4)">בדיקת פקודה</label>
+    <p class="t-help">שולח טקסט חופשי למודול — לא לפי הקידוד הרגיל. לצורך אבחון בלבד.</p>
+    <div class="row">
+      <input id="raw" placeholder="AT+NAME=LEVITEST" spellcheck="false">
+      <button class="btn btn-ghost" id="rawSend" style="min-height:44px">שליחה</button>
+    </div>
+    <div id="rawLog" style="margin-top:var(--s3); display:none">
+      <label style="margin-top:0">תשובה מהמודול</label>
+      <pre id="rawLogText" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-sm); padding:var(--s3); font-family:ui-monospace,Menlo,monospace; font-size:13px; white-space:pre-wrap; word-break:break-all; max-height:160px; overflow-y:auto; margin:0"></pre>
+    </div>
   </details>
 
+
   <button class="btn btn-ghost" id="close-sheet" style="margin-top:var(--s5)">סגירה</button>
-  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 8.0</p>
+  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 8.1</p>
 </div>
 
 <script>
@@ -656,6 +675,17 @@ async function writeOnce(bytes, critical){
   throw err;
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* ---------- כלי אבחון: bytes <-> טקסט/הקס, לתצוגת מה שנשלח/התקבל ---------- */
+function bytesToHex(b){ return [...b].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase(); }
+function bytesToText(b){ try { return new TextDecoder().decode(b); } catch { return ""; } }
+/* השדות בטופס שומרים "\n"/"\r\n" כטקסט מילולי (לא כתו שורה אמיתי) —
+   הופכים אותם כאן לתווי הבקרה האמיתיים לפני השליחה. */
+function eolChars(v){
+  if (v === "\\n") return "\n";
+  if (v === "\\r\\n") return "\r\n";
+  return "";
+}
 
 let desired = null;      // לאן צריך להגיע: null = הכל כבוי, או מספר פעולה
 let applied = null;      // איזו פעולה נכתבה בפועל לחומרה
@@ -921,6 +951,19 @@ async function openGatt(){
   }
 
   ble.connected = true; ble.retries = 0;
+
+  // האזנה להתראות חוזרות מהמודול — best effort. רוב כרטיסי הממסרים לא
+  // מחזירים כלום, אבל אם המאפיין תומך ב-notify, נציג את זה בכלי האבחון.
+  try {
+    if (ble.chr.properties.notify) {
+      await ble.chr.startNotifications();
+      ble.chr.addEventListener("characteristicvaluechanged", (e) => {
+        const bytes = new Uint8Array(e.target.value.buffer);
+        logRaw("קיבל", bytesToText(bytes) + "   [" + bytesToHex(bytes) + "]");
+      });
+    }
+  } catch {}
+
   await stopAll(true);                 // מתחילים ממצב ידוע: הכל כבוי
   keepAwake();
 }
@@ -1140,6 +1183,41 @@ $("#save").onclick = () => {
   });
   saveCfg(); compile(); closeSheet();
 };
+
+/* ---------- בדיקת פקודה: כלי אבחון, לא חלק מהפרוטוקול הרגיל ----------
+   משתמש בקידוד/סיום-השורה הנוכחיים בטופס (גם אם עוד לא נשמרו), כדי
+   שאפשר יהיה לנסות בלי לשנות את ההגדרות הפעילות של הרמפה. */
+function logRaw(dir, text){
+  $("#rawLog").style.display = "block";
+  const el = $("#rawLogText");
+  const time = new Date().toLocaleTimeString("he-IL", { hour12: false });
+  el.textContent += `[${time}] ${dir}: ${text}\n`;
+  el.scrollTop = el.scrollHeight;
+}
+$("#rawSend").onclick = async () => {
+  if (!ble.connected || !ble.chr) { alert("יש להתחבר למודול קודם."); return; }
+  const raw = $("#raw").value;
+  if (!raw.trim()) return;
+
+  const liveEnc = $("#enc").value;
+  let bytes;
+  if (liveEnc === "hex") {
+    const digits = raw.replace(/[^0-9a-fA-F]/g, "");
+    if (!digits.length || digits.length % 2) { alert("HEX לא תקין — מספר תווים אי-זוגי."); return; }
+    bytes = new Uint8Array(digits.length / 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(digits.substr(i * 2, 2), 16);
+  } else {
+    bytes = new TextEncoder().encode(raw + eolChars($("#eol").value));
+  }
+
+  logRaw("שלח", (liveEnc === "hex" ? bytesToHex(bytes) : raw) + "   [" + bytesToHex(bytes) + "]");
+  try {
+    await writeOnce(bytes, false);
+  } catch (e) {
+    logRaw("שגיאה", String(e?.message || e));
+  }
+};
+
 
 /* ---------- התקנה ----------
    כרום יורה beforeinstallprompt רק אם כל תנאי ההתקנה מתקיימים
