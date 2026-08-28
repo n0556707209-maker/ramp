@@ -280,13 +280,12 @@ details[open] summary::after{transform:rotate(180deg);}
 <div class="modal" id="lock">
   <div class="card">
     <img class="logo-lockup" id="lock-logo" alt="LEVI RAMP">
-    <h2 class="t-title" style="text-align:center">קוד גישה</h2>
-    <p class="t-help" style="text-align:center;margin-top:var(--s2)">הזן/י את הקוד שקיבלת</p>
+    <h2 class="t-title" style="text-align:center" id="lock-title">מספר יחידה</h2>
+    <p class="t-help" style="text-align:center;margin-top:var(--s2)" id="lock-sub">המספר שעל המדבקה, שהודבקה על הרכיב</p>
 
-    <div class="pin" id="pin" role="status" aria-label="ספרות שהוזנו">
-      <i></i><i></i><i></i><i></i><i></i><i></i>
-    </div>
-    <p class="err" id="code-err" hidden>קוד שגוי — נסה/י שוב</p>
+    <div class="pin" id="pin" role="status" aria-label="ספרות שהוזנו"></div>
+    <p class="t-help" style="text-align:center;margin-top:var(--s2)" id="lock-hint">לדוגמה: אם כתוב LEVI‑00042, הקלד/י 00042</p>
+    <p class="err" id="code-err" hidden>הצירוף לא תואם — נסה/י שוב מהתחלה</p>
 
     <div class="numpad" id="numpad">
       <button class="num" data-k="1">1</button>
@@ -300,24 +299,14 @@ details[open] summary::after{transform:rotate(180deg);}
       <button class="num" data-k="9">9</button>
       <button class="num util" data-k="del">מחק</button>
       <button class="num" data-k="0">0</button>
-      <button class="num util" data-k="go">כניסה</button>
+      <button class="num util" data-k="go">המשך</button>
     </div>
 
+    <button class="btn btn-ghost" id="lock-back" style="margin-top:var(--s4)" hidden>← חזרה למספר היחידה</button>
     <a class="btn btn-ghost" id="order-link" target="_blank" rel="noopener"
-       style="text-decoration:none;margin-top:var(--s5)">
-      אין לך קוד? הזמנת רכיב
+       style="text-decoration:none;margin-top:var(--s3)">
+      אין לך מספר וקוד? הזמנת רכיב
     </a>
-  </div>
-</div>
-
-<!-- ============ שגיאת רישוי ============ -->
-<div class="modal" id="lic" hidden>
-  <div class="card">
-    <h2 class="t-title">הקוד לא מתאים למודול הזה</h2>
-    <p class="t-help" style="margin-top:var(--s2)" id="lic-msg"></p>
-    <p class="t-help" style="margin-top:var(--s3)">כל רכיב מגיע עם קוד משלו. קוד של רכיב אחר לא יפעיל את המודול הזה.</p>
-    <button class="btn btn-primary" id="lic-retry" style="margin-top:var(--s4)">הזנת קוד מחדש</button>
-    <a class="btn btn-ghost" id="lic-order" target="_blank" rel="noopener" style="text-decoration:none">פנייה בוואטסאפ</a>
   </div>
 </div>
 
@@ -430,8 +419,8 @@ details[open] summary::after{transform:rotate(180deg);}
     <p class="t-help" style="margin-top:var(--s2)">לשינוי רק אם המודול לא מגיב לפקודות ברירת המחדל.</p>
 
     <div class="row">
-      <div><label for="svc">Service UUID</label><input id="svc" spellcheck="false"></div>
-      <div><label for="chr">Characteristic</label><input id="chr" spellcheck="false"></div>
+      <div><label for="svc">Service UUID</label><input id="svc" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></div>
+      <div><label for="chr">Characteristic</label><input id="chr" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></div>
     </div>
 
     <label for="enc">קידוד פקודות</label>
@@ -462,8 +451,9 @@ details[open] summary::after{transform:rotate(180deg);}
 
     <label for="raw" style="margin-top:var(--s4)">בדיקת פקודה</label>
     <p class="t-help">שולח טקסט חופשי למודול — לא לפי הקידוד הרגיל. לצורך אבחון בלבד.</p>
+    <p class="t-help" id="rawMode" style="font-weight:700; color:var(--live)"></p>
     <div class="row">
-      <input id="raw" placeholder="AT+NAME=LEVITEST" spellcheck="false">
+      <input id="raw" placeholder="AT+NAME=LEVITEST" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
       <button class="btn btn-ghost" id="rawSend" style="min-height:44px">שליחה</button>
     </div>
     <div id="rawLog" style="margin-top:var(--s3); display:none">
@@ -474,7 +464,7 @@ details[open] summary::after{transform:rotate(180deg);}
 
 
   <button class="btn btn-ghost" id="close-sheet" style="margin-top:var(--s5)">סגירה</button>
-  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 8.1</p>
+  <p class="t-help" style="text-align:center;margin-top:var(--s3)">גרסה 9.0</p>
 </div>
 
 <script>
@@ -511,9 +501,17 @@ $("#order-link").href = `https://wa.me/${ORDER_PHONE}?text=${encodeURIComponent(
    מגבלה שחשוב להכיר: הקוד רץ בצד הלקוח וקוד המקור גלוי. מי שיודע
    לקרוא JavaScript יכול לחלץ את הנוסחה ולחשב קוד לכל מודול. זה עוצר
    העתקה מזדמנת בין לקוחות, לא יריב טכני נחוש. לחסימה אמיתית נדרשת
-   הפעלה חד-פעמית מול שרת (ראו הסבר בשיחה). */
+   הפעלה חד-פעמית מול שרת (ראו הסבר בשיחה).
+
+   הבדיקה קורית כאן, בכניסה לאפליקציה — לא בחיבור לרמפה. כך אין תלות
+   בבלוטות' של המודול (שלא ניתן לשינוי), ואין רשימת קודים מרכזית
+   שצריך לעדכן ולהעלות מחדש בכל מכירה: כל מספר יחידה שמודפס על
+   מדבקה כבר תואם קוד תקף מהרגע הראשון, בלי לגעת בקוד או ב-GitHub. */
 const LICENSE_SALT = "LEVIRAMP-2026-K7";   // סוד — לשנות מייצר קודים חדשים לכולם
-const MASTER_CODE = "1960";                // קוד יצרן, פותח כל מודול. למחוק אם דולף.
+const MASTER_CODE = "1960";                // קוד יצרן, עוקף בדיקה. למחוק אם דולף.
+const SERIAL_PREFIX = "LEVI-";
+const SERIAL_LEN = 5;                      // ספרות מספר היחידה, למשל 00042
+const CODE_LEN = 6;                        // ספרות הקוד
 
 function mix32(h){
   h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b);
@@ -528,29 +526,22 @@ function h32(str, seed){
   }
   return mix32(h);
 }
-/* שם מודול -> קוד בן 6 ספרות */
-function licenseCode(moduleName){
-  const base = LICENSE_SALT + "|" + String(moduleName || "").trim().toUpperCase();
+/* מזהה יחידה (למשל "LEVI-00042") -> קוד בן 6 ספרות. זהה לחלוטין
+   לנוסחה ב-codes.html — כל שינוי כאן חייב להיעשות בשני המקומות. */
+function licenseCode(unitId){
+  const base = LICENSE_SALT + "|" + String(unitId || "").trim().toUpperCase();
   const a = h32(base, 0x811c9dc5), b = h32(base, 0x9e3779b9);
   return String(mix32(a ^ Math.imul(b, 0x27220a95)) % 1000000).padStart(6, "0");
 }
-/* האם הקוד השמור מתאים למודול שאליו התחברנו? */
-function licenseOk(moduleName){
-  const c = String(cfg.code || "").trim();
+/* בדיקה מקומית בלבד: מספר היחידה שהוזן, ביחד עם הקוד שהוזן, מתאימים
+   זה לזה לפי הנוסחה? אין כאן קריאה לרשת ואין רשימה לבדוק מולה. */
+function licenseOk(serialDigits, code){
+  const c = String(code || "").trim();
   if (!c) return false;
   if (c === MASTER_CODE) return true;
-  return c === licenseCode(moduleName);
+  const unitId = SERIAL_PREFIX + String(serialDigits || "").trim();
+  return c === licenseCode(unitId);
 }
-function codeHash(str){
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
-  let g = 0x9e3779b9;
-  for (let i = str.length - 1; i >= 0; i--) { g ^= str.charCodeAt(i); g = Math.imul(g, 0x85ebca6b); }
-  return (h >>> 0).toString(16).padStart(8, "0") + (g >>> 0).toString(16).padStart(8, "0");
-}
-/* מסך הפתיחה רק אוסף את הקוד — האימות האמיתי קורה בחיבור למודול,
-   כי רק אז ידוע מול איזה מודול צריך לבדוק. קוד באורך תקין מתקבל. */
-const codeOk = (c) => { const n = String(c || "").trim(); return n === MASTER_CODE || n.length === 6; };
 
 /* ---------- אחסון ---------- */
 const K_CFG = "leviramp.v4.cfg", K_UNLOCK = "leviramp.v4.unlock", K_TERMS = "leviramp.v4.terms";
@@ -941,15 +932,8 @@ async function openGatt(){
   }
   // אכיפת רישוי: רק עכשיו ידוע שם המודול, אז רק עכשיו אפשר לבדוק
   // שהקוד שהוזן באמת שייך למודול הזה.
-  const modName = ble.device.name || "";
-  if (!licenseOk(modName)) {
-    try { ble.device.gatt.disconnect(); } catch {}
-    ble.connected = false; ble.chr = null;
-    ble.userStop = true;               // לא מנסים להתחבר מחדש בלולאה
-    showLicenseError(modName);
-    throw new Error("license");
-  }
-
+  // הרישוי כבר נבדק בכניסה לאפליקציה (מספר יחידה + קוד) — כאן רק
+  // מתחברים. אין יותר תלות בשם שהמודול משדר בבלוטות'.
   ble.connected = true; ble.retries = 0;
 
   // האזנה להתראות חוזרות מהמודול — best effort. רוב כרטיסי הממסרים לא
@@ -1073,32 +1057,14 @@ const NAMES = { 1: "ממסר 1", 2: "ממסר 2", 3: "ממסר 3", 4: "ממסר 
 $("#cmds").innerHTML = [1, 2, 3, 4, 5].map((r) => `
   <label>${NAMES[r]}</label>
   <div class="row">
-    <input data-c="${r}-on" placeholder="הפעלה" spellcheck="false">
-    <input data-c="${r}-off" placeholder="עצירה" spellcheck="false">
+    <input data-c="${r}-on" placeholder="הפעלה" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
+    <input data-c="${r}-off" placeholder="עצירה" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
   </div>`).join("");
 
 function pairsText(){
   const p = PAIRS;
   return `פתיחה = ${p[1].join('+')} · סגירה = ${p[2].join('+')} · הרמה = ${p[3].join('+')} · הנמכה = ${p[4].join('+')}`;
 }
-/* ---------- שגיאת רישוי ---------- */
-function showLicenseError(moduleName){
-  $("#lic-msg").textContent = moduleName
-    ? `המודול שזוהה: ${moduleName}`
-    : "לא ניתן לקרוא את שם המודול.";
-  $("#lic-order").href = `https://wa.me/${ORDER_PHONE}?text=${encodeURIComponent(
-    `שלום, יש לי מודול ${moduleName || "(ללא שם)"} ואשמח לקבל את קוד ההפעלה`)}`;
-  $("#lic").hidden = false;
-  renderConn("idle", idleLabel());
-}
-$("#lic-retry").onclick = () => {
-  $("#lic").hidden = true;
-  cfg.code = ""; saveCfg();
-  store.set(K_UNLOCK, "0");
-  entry = ""; renderPin();
-  $("#lock").hidden = false;
-};
-
 /* ---------- שיוך משאית ---------- */
 function askTruckNick(){
   if (!cfg.truck) return;
@@ -1156,11 +1122,23 @@ function fillForm(){
   $("#pulse").value = cfg.minPulseMs ?? 150;
   updateRampTypeUI();
   updateTruckUI();
+  updateRawMode();
   [1, 2, 3, 4, 5].forEach((r) => {
     document.querySelector(`[data-c="${r}-on"]`).value = cfg.cmd[r].on;
     document.querySelector(`[data-c="${r}-off"]`).value = cfg.cmd[r].off;
   });
 }
+/* מחוון בלתי אפשרי לפספס: תמיד מראה איזה קידוד ישמש בפועל אם
+   לוחצים "שליחה" עכשיו — כדי שלא יישלח דבר שונה ממה שחושבים. */
+function updateRawMode(){
+  const el = $("#rawMode");
+  if (!el) return;
+  const isHex = $("#enc").value === "hex";
+  el.textContent = isHex
+    ? "⚠ מצב נוכחי: HEX — טקסט חופשי כאן לא יעבור כמו שהוא"
+    : "✓ מצב נוכחי: טקסט — יישלח בדיוק כפי שמוקלד";
+}
+$("#enc").addEventListener("change", updateRawMode);
 $("#save").onclick = () => {
   if ($("#enc").value === "hex") {
     for (const r of [1, 2, 3, 4, 5]) for (const d of ["on", "off"]) {
@@ -1203,6 +1181,17 @@ $("#rawSend").onclick = async () => {
   let bytes;
   if (liveEnc === "hex") {
     const digits = raw.replace(/[^0-9a-fA-F]/g, "");
+    // אם תווים הושמטו בשקט (למשל טקסט חופשי במצב HEX בטעות), לא
+    // ממשיכים בלי אישור — זה בדיוק המקרה שגרם לבית אקראי להישלח.
+    if (digits.length !== raw.replace(/\s/g, "").length) {
+      const ok = confirm(
+        `שים לב: המצב הוא HEX, אבל הטקסט שהוקלד מכיל תווים שאינם ספרות הקס.\n` +
+        `הם יושמטו, וייוותרו רק: ${digits || "(כלום)"}\n\n` +
+        `אם התכוונת לשלוח טקסט חופשי (כמו פקודת AT) — לחץ/י ביטול ושנה/י את הקידוד ל"טקסט" למעלה.\n\n` +
+        `להמשיך לשלוח את "${digits}" כמו שהוא?`
+      );
+      if (!ok) return;
+    }
     if (!digits.length || digits.length % 2) { alert("HEX לא תקין — מספר תווים אי-זוגי."); return; }
     bytes = new Uint8Array(digits.length / 2);
     for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(digits.substr(i * 2, 2), 16);
@@ -1238,27 +1227,58 @@ $("#install-btn").onclick = async () => {
 };
 window.addEventListener("appinstalled", () => { installPrompt = null; $("#install-btn").hidden = true; });
 
-/* ---------- כניסה ---------- */
-/* ---------- כניסה עם מקלדת מובנית ---------- */
+/* ---------- כניסה: שני שלבים, מקלדת מובנית ---------- */
+let lockStep = 1;          // 1 = מספר יחידה, 2 = קוד
+let serialEntry = "";
 let entry = "";
-const PIN_LEN = 6;   // קוד רישוי בן 6 ספרות
 
+function stepLen(){ return lockStep === 1 ? SERIAL_LEN : CODE_LEN; }
+
+function buildPinDots(){
+  const n = stepLen();
+  $("#pin").innerHTML = "<i></i>".repeat(n);
+}
 function renderPin(){
   const dots = $("#pin").children;
-  for (let i = 0; i < dots.length; i++) dots[i].classList.toggle("on", i < entry.length);
+  const cur = lockStep === 1 ? serialEntry : entry;
+  for (let i = 0; i < dots.length; i++) dots[i].classList.toggle("on", i < cur.length);
 }
 function pinError(){
   $("#code-err").hidden = false;
   $("#pin").classList.add("bad");
   buzz(70);
-  setTimeout(() => { $("#pin").classList.remove("bad"); entry = ""; renderPin(); }, 400);
+  setTimeout(() => {
+    $("#pin").classList.remove("bad");
+    // חוזרים לגמרי לשלב 1: אי אפשר לדעת אם הטעות הייתה במספר או
+    // בקוד, אז עדיף להקליד את שניהם מחדש ולא להישאר עם ערך תקוע.
+    goToStep(1);
+  }, 400);
+}
+function goToStep(n){
+  lockStep = n;
+  entry = "";                          // תמיד מנקים את הקוד — הוא לא נשמר בין שלבים
+  if (n === 1) serialEntry = "";       // רק כשחוזרים לשלב 1 מנקים גם את המספר
+  buildPinDots(); renderPin();
+  $("#code-err").hidden = true;
+  if (n === 1) {
+    $("#lock-title").textContent = "מספר יחידה";
+    $("#lock-sub").textContent = "המספר שעל המדבקה, שהודבקה על הרכיב";
+    $("#lock-hint").hidden = false;
+    $("#lock-back").hidden = true;
+    $("#order-link").hidden = false;
+  } else {
+    $("#lock-title").textContent = "קוד גישה";
+    $("#lock-sub").textContent = "הקוד שקיבלת יחד עם מספר היחידה";
+    $("#lock-hint").hidden = true;
+    $("#lock-back").hidden = false;
+    $("#order-link").hidden = true;
+  }
 }
 function unlock(){
-  if (codeOk(entry)) {
-    cfg.code = entry; saveCfg();
+  if (licenseOk(serialEntry, entry)) {
+    cfg.serial = serialEntry; cfg.code = entry; saveCfg();
     store.set(K_UNLOCK, "1");
     $("#lock").hidden = true;
-    entry = ""; renderPin(); $("#code-err").hidden = true;
     afterUnlock();
   } else {
     pinError();
@@ -1266,19 +1286,26 @@ function unlock(){
 }
 function press(k){
   $("#code-err").hidden = true;
-  if (k === "del") { entry = entry.slice(0, -1); renderPin(); return; }
-  if (k === "go") { unlock(); return; }
-  if (entry.length >= 8) return;
-  entry += k;
+  const cur = () => (lockStep === 1 ? serialEntry : entry);
+  const setCur = (v) => { if (lockStep === 1) serialEntry = v; else entry = v; };
+
+  if (k === "del") { setCur(cur().slice(0, -1)); renderPin(); return; }
+  if (k === "go") {
+    if (lockStep === 1) { if (serialEntry.length === SERIAL_LEN) goToStep(2); return; }
+    unlock(); return;
+  }
+  if (cur().length >= stepLen()) return;
+  setCur(cur() + k);
   renderPin();
   buzz(8);
-  // שליחה אוטומטית ברגע שהוזן קוד באורך המלא — פחות הקשות
-  if (entry.length === PIN_LEN) setTimeout(unlock, 120);
+  // מעבר אוטומטי / כניסה אוטומטית ברגע שהוזן האורך המלא
+  if (cur().length === stepLen()) setTimeout(() => (lockStep === 1 ? goToStep(2) : unlock()), 120);
 }
 $("#numpad").addEventListener("click", (e) => {
   const b = e.target.closest("[data-k]");
   if (b) press(b.dataset.k);
 });
+$("#lock-back").onclick = () => goToStep(1);
 // גם מקלדת פיזית עובדת, למי שיש
 document.addEventListener("keydown", (e) => {
   if ($("#lock").hidden) return;
@@ -1300,7 +1327,7 @@ function boot(){
 
 /* ---------- אתחול ---------- */
 if (store.get(K_UNLOCK) === "1") { $("#lock").hidden = true; afterUnlock(); }
-else { $("#lock").hidden = false; renderPin(); }
+else { $("#lock").hidden = false; goToStep(1); }
 renderConn("idle", idleLabel());
 
 /* Service Worker — קובץ אמיתי, אחרת ההתקנה לא מוצעת בכלל */

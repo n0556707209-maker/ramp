@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LEVI RAMP · מחולל קודים (פנימי)</title>
+<style>
+:root{
+  --bg:#f4f6f8; --surface:#fff; --border:#e3e7ec; --border-strong:#d0d7de;
+  --text:#0f1a24; --text-2:#5b6b7a; --brand:#1f3447; --warn:#b54708; --warn-bg:#fffaeb;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+     padding:24px 16px;max-width:640px;margin:0 auto;line-height:1.5}
+h1{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.sub{font-size:13px;color:var(--text-2);margin-top:4px}
+.warn{background:var(--warn-bg);border:1px solid #fec84b;color:var(--warn);
+      border-radius:12px;padding:12px 14px;font-size:13px;margin:16px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-top:16px}
+label{display:block;font-size:12px;font-weight:600;color:var(--text-2);margin:0 0 8px}
+input,textarea{width:100%;border:1px solid var(--border-strong);border-radius:10px;padding:12px;
+      font-size:16px;font-family:inherit;background:#fff;color:var(--text)}
+textarea{font-family:ui-monospace,Menlo,monospace;font-size:14px;min-height:110px;resize:vertical}
+.out{margin-top:16px;text-align:center;background:#0f1a24;color:#fff;border-radius:12px;padding:20px}
+.code{font-size:38px;font-weight:700;letter-spacing:.18em;font-family:ui-monospace,Menlo,monospace}
+.code.empty{font-size:15px;letter-spacing:0;opacity:.5;font-family:inherit}
+.hint{font-size:12px;color:var(--text-2);margin-top:8px}
+table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}
+th,td{text-align:right;padding:9px 6px;border-bottom:1px solid var(--border)}
+th{font-size:12px;color:var(--text-2);font-weight:600}
+td.c{font-family:ui-monospace,Menlo,monospace;font-weight:700;letter-spacing:.06em}
+td.dup{color:#b42318}
+button{background:var(--brand);color:#fff;border:none;border-radius:10px;padding:12px 18px;
+       font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;margin-top:12px}
+button.ghost{background:transparent;color:var(--text-2);border:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<h1>מחולל קודי רישוי</h1>
+<p class="sub">כלי פנימי — לא להעביר ללקוחות</p>
+<p class="sub" style="margin-top:6px">רץ מקומית במחשב. אין צורך להעלות לשום אתר, ולא נדרש אינטרנט.</p>
+
+<div class="warn">
+  <b>שמור על הקובץ הזה אצלך בלבד.</b> אין להעלות אותו ל-GitHub לצד האפליקציה —
+  מי שיפתח אותו יוכל לייצר קוד לכל מספר יחידה. שמור אותו במחשב או בדרייב פרטי.
+  <br><br>
+  <b>לפני כל דבר:</b> מדביקים על הרכיב עצמו מדבקה עם מספר בן 5 ספרות
+  (כמו 00042). הכלי הזה הופך כל מספר כזה לקוד שהלקוח מקליד באפליקציה —
+  בלי שום קשר לבלוטות' או לשם שהמודול משדר.
+</div>
+
+<div class="card">
+  <label for="one">מספר יחידה (על המדבקה)</label>
+  <input id="one" placeholder="42" inputmode="numeric" autocomplete="off">
+  <p class="hint" id="one-id" style="margin-top:0"></p>
+  <div class="out"><div class="code empty" id="out">הזן/י מספר יחידה</div></div>
+  <p class="hint">חמש ספרות עם אפסים מובילים, בדיוק כמו שהלקוח יקליד באפליקציה.</p>
+</div>
+
+<div class="card">
+  <label for="many">רשימה — מספר יחידה בכל שורה</label>
+  <textarea id="many" spellcheck="false" placeholder="42&#10;43&#10;44"></textarea>
+  <button id="gen">חשב</button>
+  <button class="ghost" id="copy">העתק כטבלה</button>
+  <button class="ghost" id="dl">הורדה כקובץ CSV</button>
+  <div id="manual-wrap" hidden style="margin-top:12px">
+    <textarea id="manual" readonly style="min-height:80px"></textarea>
+  </div>
+  <div id="tbl"></div>
+</div>
+
+<script>
+"use strict";
+/* חייב להיות זהה לאפליקציה — כל שינוי כאן מבטל קודים שכבר נמסרו */
+const LICENSE_SALT = "LEVIRAMP-2026-K7";
+
+function mix32(h){
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16; return h >>> 0;
+}
+function h32(str, seed){
+  let h = seed >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193);
+    h = (h << 13) | (h >>> 19);
+  }
+  return mix32(h);
+}
+function licenseCode(unitId){
+  const base = LICENSE_SALT + "|" + String(unitId || "").trim().toUpperCase();
+  const a = h32(base, 0x811c9dc5), b = h32(base, 0x9e3779b9);
+  return String(mix32(a ^ Math.imul(b, 0x27220a95)) % 1000000).padStart(6, "0");
+}
+/* בדיוק כמו באפליקציה: תמיד 5 ספרות עם אפסים מובילים + קידומת קבועה.
+   זו הנקודה הקריטית — אם הפורמט כאן לא זהה בול לאפליקציה, הקוד
+   שיוצא לא יעבוד ללקוח, גם אם המספר "נכון" מבחינה אנושית. */
+const SERIAL_PREFIX = "LEVI-";
+const SERIAL_LEN = 5;
+function toUnitId(numStr){
+  const digits = String(numStr || "").replace(/[^0-9]/g, "");
+  if (!digits) return null;
+  if (digits.length > SERIAL_LEN) return null;   // יותר מדי ספרות — לא יוקלד באפליקציה
+  return SERIAL_PREFIX + digits.padStart(SERIAL_LEN, "0");
+}
+
+const $ = (s) => document.querySelector(s);
+
+$("#one").addEventListener("input", (e) => {
+  const v = e.target.value.trim();
+  const out = $("#out"), idLine = $("#one-id");
+  if (!v) { out.textContent = "הזן/י מספר יחידה"; out.className = "code empty"; idLine.textContent = ""; return; }
+  const id = toUnitId(v);
+  if (!id) { out.textContent = "מקסימום 5 ספרות"; out.className = "code empty"; idLine.textContent = ""; return; }
+  idLine.textContent = "מזהה מלא: " + id;
+  out.textContent = licenseCode(id);
+  out.className = "code";
+});
+
+let rows = [];
+$("#gen").onclick = () => {
+  const nums = $("#many").value.split("\n").map((x) => x.trim()).filter(Boolean);
+  const seen = new Map();
+  rows = nums.map((n) => {
+    const id = toUnitId(n);
+    if (!id) return { num: n, id: "—", code: "שגוי (מקס 5 ספרות)", bad: true };
+    const c = licenseCode(id);
+    const dup = seen.has(c);
+    if (!dup) seen.set(c, id);
+    return { num: n, id, code: c, dup, dupWith: dup ? seen.get(c) : "" };
+  });
+  const dups = rows.filter((r) => r.dup).length;
+  const bad = rows.filter((r) => r.bad).length;
+  $("#tbl").innerHTML =
+    (dups ? `<p class="hint" style="color:#b42318"><b>${dups} התנגשויות</b> — שני מספרים קיבלו אותו קוד.</p>` : "") +
+    (bad ? `<p class="hint" style="color:#b42318"><b>${bad} שורות לא תקינות</b> — יותר מ-5 ספרות.</p>` : "") +
+    `<table><tr><th>מספר</th><th>מזהה מלא</th><th>קוד</th></tr>` +
+    rows.map((r) => `<tr><td>${String(r.num).replace(/[<>&]/g, "")}</td><td class="c">${r.id}</td><td class="c${r.dup || r.bad ? " dup" : ""}">${r.code}${r.dup ? " ⚠" : ""}</td></tr>`).join("") +
+    `</table>`;
+};
+/* העתקה עמידה: clipboard API לא תמיד זמין כשפותחים קובץ מקומי,
+   ולכן יש נפילה חזרה לשיטה הישנה, ואם גם היא נכשלת — מציגים את
+   הטקסט לבחירה ידנית. */
+async function copyText(txt){
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(txt); return true;
+    }
+  } catch {}
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = txt;
+    ta.style.cssText = "position:fixed;top:-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (ok) return true;
+  } catch {}
+  return false;
+}
+function tableText(){
+  return rows.map((r) => `${r.num}\t${r.id}\t${r.code}`).join("\n");
+}
+$("#copy").onclick = async () => {
+  if (!rows.length) { $("#copy").textContent = "אין נתונים"; setTimeout(()=>{$("#copy").textContent="העתק כטבלה";},1200); return; }
+  const ok = await copyText(tableText());
+  $("#copy").textContent = ok ? "הועתק ✓" : "בחר/י והעתק/י ידנית ↓";
+  if (!ok) $("#manual").value = tableText(), $("#manual-wrap").hidden = false, $("#manual").select();
+  setTimeout(() => { $("#copy").textContent = "העתק כטבלה"; }, 1800);
+};
+/* הורדה כקובץ — הדרך הבטוחה ביותר לשמור את הרשימה */
+$("#dl").onclick = () => {
+  if (!rows.length) return;
+  const csv = "\uFEFFמספר,מזהה מלא,קוד\n" + rows.map((r) => `${r.num},${r.id},${r.code}`).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `levi-codes-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+</script>
+</body>
+</html>
